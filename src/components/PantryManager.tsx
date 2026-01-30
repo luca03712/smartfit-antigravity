@@ -213,16 +213,18 @@ function PantryItemModal({ onClose, onSave, initialData }: ModalProps) {
             if (data.nutrition) setNutrition({ ...nutrition, ...data.nutrition });
             if (data.nutriScore) setNutriScore(data.nutriScore);
             if (data.categories) setCategories(data.categories);
-        } else {
-            // Error handling handled by Scanner component now or we can show alert here?
-            // The user requested explicit button inside Scanner.
-            // This is just the callback.
-            // If data is null, fetch failed.
         }
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleSubmit = (e?: React.FormEvent) => {
+        if (e) e.preventDefault();
+
+        // Manual validation to allow button to be clickable
+        if (!name.trim()) {
+            alert("Inserisci il nome del prodotto per continuare.");
+            return;
+        }
+
         onSave({
             id: initialData?.id || crypto.randomUUID(),
             name,
@@ -264,24 +266,33 @@ function PantryItemModal({ onClose, onSave, initialData }: ModalProps) {
     }
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4">
-            {/* Backdrop */}
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+        <div className="fixed inset-0 z-50 flex items-center justify-center sm:p-4">
+            {/* Backdrop for Desktop */}
+            <div className="hidden sm:block absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
-            {/* Modal Content */}
-            <div className="relative bg-white w-full max-w-lg h-full sm:h-auto sm:max-h-[90vh] sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-                {/* Header */}
-                <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-white z-10 shrink-0">
-                    <h2 className="text-lg font-bold">
+            {/* Modal Container */}
+            <div className="relative bg-white w-full h-full sm:w-full sm:max-w-lg sm:h-auto sm:max-h-[90vh] sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
+
+                {/* Header (Sticky Top) */}
+                <div className="flex justify-between items-center p-4 border-b border-gray-100 bg-white z-10 shrink-0">
+                    <button onClick={onClose} className="p-2 -ml-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors">
+                        <X size={24} />
+                    </button>
+
+                    <h2 className="text-lg font-black tracking-tight">
                         {initialData ? 'Modifica' : 'Aggiungi'}
                     </h2>
-                    <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
-                        <X size={20} />
+
+                    <button
+                        onClick={() => handleSubmit()}
+                        className="text-blue-600 font-bold text-base px-2 py-1 active:opacity-60"
+                    >
+                        Salva
                     </button>
                 </div>
 
-                {/* Scrollable Content */}
-                <div className="flex-1 overflow-y-auto p-5 space-y-6">
+                {/* Scrollable Body */}
+                <div className="flex-1 overflow-y-auto p-5 pb-24 space-y-6">
                     {/* Scanner Button */}
                     {!initialData && (
                         <button
@@ -401,17 +412,6 @@ function PantryItemModal({ onClose, onSave, initialData }: ModalProps) {
                             <NumInput label="Sat.F" value={nutrition.saturatedFat} onChange={v => setNutrition({ ...nutrition, saturatedFat: v })} />
                         </div>
                     </div>
-                </div>
-
-                {/* Sticky Footer */}
-                <div className="p-4 border-t border-gray-100 bg-white z-10 sticky bottom-0 shrink-0 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-                    <button
-                        onClick={handleSubmit}
-                        disabled={!name}
-                        className="w-full py-4 bg-black text-white rounded-xl font-bold text-lg hover:bg-gray-800 active:scale-95 transition-all disabled:opacity-50 disabled:scale-100"
-                    >
-                        Salva Alimento
-                    </button>
                 </div>
             </div>
         </div>
