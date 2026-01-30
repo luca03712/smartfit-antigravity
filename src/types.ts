@@ -1,7 +1,7 @@
 export type Gender = 'male' | 'female';
 export type TrainingType = 'bodybuilding' | 'cardio' | 'powerlifting' | 'crossfit' | 'martial_arts';
 export type Goal = 'loss' | 'maintenance' | 'bulking';
-export type ActivityLevel = 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active';
+export type ActivityLevel = 'sedentary' | 'lightly_active' | 'moderate' | 'very_active';
 
 export interface WeeklySchedule {
     // Key: day index (0-6, 0=Monday), Value: Workout time string "18:00" or null if rest day
@@ -13,10 +13,16 @@ export interface UserProfile {
     weight: number; // kg
     height: number; // cm
     gender: Gender;
+    activityLevel: ActivityLevel;
     trainingType: TrainingType;
     trainingFrequency: number; // days per week
     goal: Goal;
     schedule: WeeklySchedule;
+    waterIntake: {
+        current: number; // ml
+        target: number; // ml
+    };
+    workoutTime?: string; // e.g. "18:00"
 }
 
 export interface Nutrition {
@@ -27,31 +33,34 @@ export interface Nutrition {
     sugar: number;
     fiber: number;
     salt: number;
+    saturatedFat: number;
 }
 
-export type FoodCategory = 'protein' | 'carb' | 'fat' | 'veg' | 'flavor' | 'fruit' | 'other';
-export type Unit = 'g' | 'ml' | 'unit';
+export type FoodCategory = 'Colazione' | 'PranzoCena' | 'Spuntino' | 'Condimento';
+export type Unit = 'g' | 'ml' | 'pz';
+export type NutriScore = 'a' | 'b' | 'c' | 'd' | 'e';
 
 export interface PantryItem {
     id: string;
     name: string;
     brand?: string;
-    cost?: number;
     quantity: number;
     unit: Unit;
-    nutrition: Nutrition; // per 100g/ml or per unit
-    isCondiment: boolean;
+    nutrition: Nutrition; // per 100g/ml or per 1 conversionFactor
+    nutriScore?: NutriScore;
     category: FoodCategory;
+    conversionFactor?: number; // if unit is 'pz', grams per piece
+    barcode?: string;
 }
 
 export interface Meal {
     id: string;
     name: string;
     type: 'breakfast' | 'snack_am' | 'lunch' | 'snack_pm' | 'dinner';
-    ingredients: { item: PantryItem; amount: number }[];
+    ingredients: { item: PantryItem; amount: number }[]; // amount in 'g' or 'ml' usually, or 'pz' if handled
     totalNutrition: Nutrition;
     prepTime: number; // minutes
-    instructions: string[];
+    method: string; // generated procedural instructions
 }
 
 export interface DayPlan {

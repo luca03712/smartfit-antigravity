@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { UserProvider, useUser } from './context/UserContext';
-import { InventoryProvider } from './context/InventoryContext';
+import { PantryProvider } from './context/PantryContext';
 import { MealPlannerProvider } from './context/MealPlannerContext';
 import { Onboarding } from './components/Onboarding';
 import { Layout } from './components/Layout';
@@ -9,9 +9,11 @@ import { MealPlanView } from './components/MealPlanView';
 import type { UserProfile } from './types';
 import { Target, Weight } from 'lucide-react';
 
+import { Dashboard } from './components/Dashboard';
+
 function AppContent() {
   const { hasOnboarded, profile } = useUser();
-  const [activeTab, setActiveTab] = useState<'pantry' | 'planner' | 'profile'>('pantry');
+  const [activeTab, setActiveTab] = useState<'home' | 'pantry' | 'planner' | 'profile'>('home');
 
   // If not onboarded, show onboarding flow
   if (!hasOnboarded) {
@@ -20,6 +22,7 @@ function AppContent() {
 
   return (
     <Layout activeTab={activeTab} onTabChange={setActiveTab}>
+      {activeTab === 'home' && <Dashboard />}
       {activeTab === 'pantry' && <PantryManager />}
       {activeTab === 'planner' && <MealPlanView />}
       {activeTab === 'profile' && profile && (
@@ -76,11 +79,11 @@ function ProfileView({ profile }: { profile: UserProfile }) {
 export default function App() {
   return (
     <UserProvider>
-      <InventoryProvider>
+      <PantryProvider>
         <MealPlannerProvider>
           <AppContent />
         </MealPlannerProvider>
-      </InventoryProvider>
+      </PantryProvider>
     </UserProvider>
   );
 }

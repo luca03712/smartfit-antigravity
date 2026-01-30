@@ -1,11 +1,11 @@
 import type { ReactNode } from 'react';
-import { LayoutGrid, ChefHat, UserCircle } from 'lucide-react';
+import { LayoutGrid, ChefHat, UserCircle, Home } from 'lucide-react';
 import { clsx } from 'clsx';
 
 interface LayoutProps {
     children: ReactNode;
-    activeTab: 'pantry' | 'planner' | 'profile';
-    onTabChange: (tab: 'pantry' | 'planner' | 'profile') => void;
+    activeTab: 'home' | 'pantry' | 'planner' | 'profile';
+    onTabChange: (tab: 'home' | 'pantry' | 'planner' | 'profile') => void;
 }
 
 export function Layout({ children, activeTab, onTabChange }: LayoutProps) {
@@ -17,6 +17,12 @@ export function Layout({ children, activeTab, onTabChange }: LayoutProps) {
 
             {/* Bottom Navigation */}
             <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-6 py-4 flex justify-between items-center z-50 safe-area-bottom">
+                <NavButton
+                    active={activeTab === 'home'}
+                    onClick={() => onTabChange('home')}
+                    icon={<Home size={24} />}
+                    label="Home"
+                />
                 <NavButton
                     active={activeTab === 'pantry'}
                     onClick={() => onTabChange('pantry')}

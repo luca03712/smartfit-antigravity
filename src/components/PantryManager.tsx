@@ -1,29 +1,27 @@
-import { useState } from 'react';
-import { useInventory } from '../context/InventoryContext';
-import type { PantryItem, FoodCategory } from '../types';
-import { Plus, Trash2, Search } from 'lucide-react'; // Zap changed to Edit2 if available, or just use text/click
-import { Edit2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { usePantry } from '../context/PantryContext';
+import type { PantryItem, FoodCategory, NutriScore, Nutrition } from '../types';
+import { Plus, Trash2, Search, Scan, X } from 'lucide-react';
+import { Scanner } from './Scanner';
+import { fetchProductByBarcode, searchInternalDatabase } from '../utils/foodApi';
 import { clsx } from 'clsx';
 
 export function PantryManager() {
-    const { items, addItem, removeItem, updateItem } = useInventory();
-    const [editingItem, setEditingItem] = useState<PantryItem | null>(null);
+    const { items, addItem, removeItem, updateItem } = usePantry();
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [filter, setFilter] = useState<'all' | 'condiment' | 'food'>('all');
+    const [editingItem, setEditingItem] = useState<PantryItem | null>(null);
+    const [filter, setFilter] = useState<FoodCategory | 'All'>('All');
 
-    const filteredItems = items.filter(item => {
-        if (filter === 'condiment') return item.isCondiment;
-        if (filter === 'food') return !item.isCondiment;
-        return true;
-    });
-
-    const handleEdit = (item: PantryItem) => {
-        setEditingItem(item);
-        setIsModalOpen(true);
-    };
+    // Derived state for list
+    const filteredItems = items.filter(item => filter === 'All' ? true : item.category === filter);
 
     const handleAdd = () => {
         setEditingItem(null);
+        setIsModalOpen(true);
+    };
+
+    const handleEdit = (item: PantryItem) => {
+        setEditingItem(item);
         setIsModalOpen(true);
     };
 
@@ -38,76 +36,52 @@ export function PantryManager() {
     };
 
     return (
-        <div className="p-6 pb-24">
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold text-gray-900">La Mia Dispensa</h1>
+        <div className="p-4 pb-24 max-w-lg mx-auto">
+            <header className="flex justify-between items-center mb-6">
+                <h1 className="text-2xl font-black text-gray-900 tracking-tight">Dispensa</h1>
                 <button
                     onClick={handleAdd}
-                    className="w-10 h-10 bg-black text-white rounded-full flex items-center justify-center shadow-lg active:scale-90 transition-transform"
+                    className="w-12 h-12 bg-black text-white rounded-full flex items-center justify-center shadow-xl active:scale-90 transition-transform"
                 >
                     <Plus size={24} />
                 </button>
-            </div>
+            </header>
 
-            {/* Filter Tabs */}
-            <div className="flex bg-gray-100 p-1 rounded-xl mb-6">
-                {(['all', 'food', 'condiment'] as const).map(f => (
+            {/* Category Filter */}
+            <div className="flex gap-2 overflow-x-auto pb-4 no-scrollbar">
+                {(['All', 'Colazione', 'PranzoCena', 'Spuntino', 'Condimento'] as const).map(cat => (
                     <button
-                        key={f}
-                        onClick={() => setFilter(f)}
+                        key={cat}
+                        onClick={() => setFilter(cat)}
                         className={clsx(
-                            "flex-1 py-2 text-xs font-semibold uppercase tracking-wider rounded-lg transition-all",
-                            filter === f ? "bg-white text-black shadow-sm" : "text-gray-500"
+                            "px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-colors border",
+                            filter === cat
+                                ? "bg-black text-white border-black"
+                                : "bg-white text-gray-600 border-gray-200 hover:border-gray-400"
                         )}
                     >
-                        {f === 'food' ? "Cibo" : f === 'condiment' ? "Extra" : "Tutti"}
+                        {cat === 'All' ? 'Tutti' : cat}
                     </button>
                 ))}
             </div>
 
+            {/* List */}
             <div className="space-y-3">
                 {filteredItems.length === 0 ? (
                     <div className="text-center py-12 text-gray-400">
-                        <Search size={48} className="mx-auto mb-4 opacity-20" />
-                        <p>La dispensa è vuota.</p>
-                        <p className="text-sm">Aggiungi ingredienti per iniziare.</p>
+                        <div className="bg-gray-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <Search size={24} className="opacity-20" />
+                        </div>
+                        <p className="font-medium">Nessun alimento trovato</p>
                     </div>
                 ) : (
                     filteredItems.map(item => (
-                        <div
+                        <PantryCard
                             key={item.id}
+                            item={item}
                             onClick={() => handleEdit(item)}
-                            className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center cursor-pointer hover:border-gray-300 transition-colors"
-                        >
-                            <div className="flex-1">
-                                <div className="font-bold text-gray-900 flex items-center gap-2">
-                                    {item.name}
-                                    {item.isCondiment && <span className="text-[10px] bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded font-medium">EXTRA</span>}
-                                </div>
-                                <div className="text-xs text-gray-500 mt-1">
-                                    <span className="font-semibold text-gray-900">{item.quantity}{item.unit}</span>
-                                    <span className="mx-1">•</span>
-                                    <span>{item.nutrition.calories} kcal/100g</span>
-                                </div>
-                                <div className="text-[10px] text-gray-400 mt-1 flex gap-2">
-                                    <span>P: {item.nutrition.protein}g</span>
-                                    <span>C: {item.nutrition.carbs}g</span>
-                                    <span>F: {item.nutrition.fat}g</span>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <Edit2 size={16} className="text-gray-300" />
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        if (confirm('Eliminare questo alimento?')) removeItem(item.id);
-                                    }}
-                                    className="p-2 text-gray-300 hover:text-red-500 transition-colors z-10"
-                                >
-                                    <Trash2 size={18} />
-                                </button>
-                            </div>
-                        </div>
+                            onDelete={() => removeItem(item.id)}
+                        />
                     ))
                 )}
             </div>
@@ -123,144 +97,288 @@ export function PantryManager() {
     );
 }
 
+function PantryCard({ item, onClick, onDelete }: { item: PantryItem, onClick: () => void, onDelete: () => void }) {
+    const scoreColor = {
+        'a': 'bg-green-500',
+        'b': 'bg-green-400',
+        'c': 'bg-yellow-400',
+        'd': 'bg-orange-400',
+        'e': 'bg-red-500'
+    }[item.nutriScore || 'e'];
 
-interface PantryItemModalProps {
+    return (
+        <div
+            onClick={onClick}
+            className="group relative bg-white p-4 rounded-2xl shadow-sm border border-gray-100 active:scale-[0.99] transition-all cursor-pointer overflow-hidden"
+        >
+            <div className="flex justify-between items-start">
+                <div>
+                    <div className="flex items-center gap-2">
+                        <span className="font-bold text-gray-900">{item.name}</span>
+                        {item.brand && <span className="text-[10px] text-gray-400 uppercase tracking-wider">{item.brand}</span>}
+                    </div>
+                    <div className="flex items-center gap-2 mt-1">
+                        <span className="text-xs font-mono bg-gray-100 px-2 py-0.5 rounded text-gray-600">
+                            {item.quantity}{item.unit}
+                        </span>
+                        <span className="text-xs text-gray-400">
+                            {item.nutrition.calories} kcal/100g
+                        </span>
+                    </div>
+                </div>
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold uppercase text-xs ${scoreColor}`}>
+                    {item.nutriScore || '?'}
+                </div>
+            </div>
+
+            {/* Macros Mini Bar */}
+            <div className="flex gap-1 mt-3">
+                <div className="h-1 bg-blue-500 rounded-full" style={{ flex: item.nutrition.protein }} />
+                <div className="h-1 bg-amber-500 rounded-full" style={{ flex: item.nutrition.carbs }} />
+                <div className="h-1 bg-rose-500 rounded-full" style={{ flex: item.nutrition.fat }} />
+            </div>
+
+            <button
+                onClick={(e) => { e.stopPropagation(); if (confirm('Eliminare?')) onDelete(); }}
+                className="absolute top-4 right-14 p-2 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+            >
+                <Trash2 size={16} />
+            </button>
+        </div>
+    );
+}
+
+interface ModalProps {
     onClose: () => void;
     onSave: (item: PantryItem) => void;
     initialData: PantryItem | null;
 }
 
-function PantryItemModal({ onClose, onSave, initialData }: PantryItemModalProps) {
+function PantryItemModal({ onClose, onSave, initialData }: ModalProps) {
+    const [isScanning, setIsScanning] = useState(false);
+
+    // Form State
     const [name, setName] = useState(initialData?.name || '');
-    const [quantity, setQuantity] = useState(initialData?.quantity || 100);
-    const [isCondiment, setIsCondiment] = useState(initialData?.isCondiment || false);
+    const [brand, setBrand] = useState(initialData?.brand || '');
+    const [category, setCategory] = useState<FoodCategory>(initialData?.category || 'Colazione');
+    const [nutriScore, setNutriScore] = useState<NutriScore>(initialData?.nutriScore || 'c');
+
+    // Quantity State
+    const [unit, setUnit] = useState<'g' | 'ml' | 'pz'>(initialData?.unit || 'g');
+    const [quantity, setQuantity] = useState<number | ''>(initialData?.quantity || '');
+    const [conversion, setConversion] = useState<number | ''>(initialData?.conversionFactor || '');
 
     // Nutrition State
-    const [calories, setCalories] = useState(initialData?.nutrition.calories || 0);
-    const [protein, setProtein] = useState(initialData?.nutrition.protein || 0);
-    const [carbs, setCarbs] = useState(initialData?.nutrition.carbs || 0);
-    const [fat, setFat] = useState(initialData?.nutrition.fat || 0);
+    const [nutrition, setNutrition] = useState<Nutrition>(initialData?.nutrition || {
+        calories: 0, protein: 0, carbs: 0, fat: 0, sugar: 0, fiber: 0, salt: 0, saturatedFat: 0
+    });
+
+    // Auto-fill effect
+    useEffect(() => {
+        if (!initialData && name.length > 2) {
+            const match = searchInternalDatabase(name);
+            if (match) {
+                if (match.nutrition) setNutrition({ ...nutrition, ...match.nutrition });
+                if (match.category) setCategory(match.category);
+                if (match.nutriScore) setNutriScore(match.nutriScore);
+                if (match.unit) setUnit(match.unit);
+                if (match.conversionFactor) setConversion(match.conversionFactor);
+            }
+        }
+    }, [name, initialData]); // Run when name changes and no initial data
+
+    const handleScan = async (code: string) => {
+        setIsScanning(false);
+        const data = await fetchProductByBarcode(code);
+        if (data) {
+            setName(data.name || name);
+            if (data.brand) setBrand(data.brand);
+            if (data.nutrition) setNutrition({ ...nutrition, ...data.nutrition });
+            if (data.nutriScore) setNutriScore(data.nutriScore);
+            if (data.category) setCategory(data.category);
+        } else {
+            alert('Prodotto non trovato o errore API.');
+        }
+    };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-
-        // Manual Category Logic
-        let category: FoodCategory = 'other';
-        if (protein >= carbs && protein >= fat) category = 'protein';
-        else if (carbs >= protein && carbs >= fat) category = 'carb';
-        else if (fat >= protein && fat >= carbs) category = 'fat';
-
-        // Refine if condiment
-        if (isCondiment) category = 'flavor';
-
-        const newItem: PantryItem = {
-            id: initialData?.id || Date.now().toString(),
+        onSave({
+            id: initialData?.id || crypto.randomUUID(),
             name,
-            quantity,
-            unit: 'g',
-            nutrition: {
-                calories,
-                protein,
-                carbs,
-                fat,
-                sugar: 0,
-                fiber: 0,
-                salt: 0
-            },
-            isCondiment,
-            category
-        };
-
-        onSave(newItem);
+            brand,
+            category,
+            nutriScore,
+            unit,
+            quantity: Number(quantity) || 0,
+            conversionFactor: unit === 'pz' ? Number(conversion) || 50 : undefined,
+            nutrition
+        });
     };
 
+    // Helper for number inputs to fix "leading zero" (by treating 0 as '')
+    const NumInput = ({ label, value, onChange, step = "0.1" }: { label: string, value: number, onChange: (v: number) => void, step?: string }) => (
+        <div>
+            <label className="text-[10px] uppercase font-bold text-gray-400 mb-1 block">{label}</label>
+            <input
+                type="number"
+                step={step}
+                min="0"
+                className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2 text-sm focus:ring-2 focus:ring-black outline-none transition-all"
+                value={value === 0 ? '' : value}
+                onChange={e => onChange(e.target.value === '' ? 0 : parseFloat(e.target.value))}
+                placeholder="0"
+            />
+        </div>
+    );
+
+    if (isScanning) {
+        return <Scanner onScan={handleScan} onClose={() => setIsScanning(false)} />;
+    }
+
     return (
-        <div className="fixed inset-0 bg-black/50 z-[100] flex items-end sm:items-center justify-center p-4 backdrop-blur-sm">
-            <div className="bg-white w-full max-w-md rounded-2xl p-6 shadow-2xl animate-in slide-in-from-bottom duration-300 max-h-[90vh] overflow-y-auto">
-                <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-xl font-bold">{initialData ? 'Modifica Alimento' : 'Aggiungi Alimento'}</h2>
-                    <button onClick={onClose} className="p-2 bg-gray-100 rounded-full">✕</button>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+            <div className="bg-white w-full max-w-lg h-[90vh] sm:h-auto sm:max-h-[85vh] rounded-t-3xl sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-300">
+                {/* Header */}
+                <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-white z-10 sticky top-0">
+                    <h2 className="text-lg font-bold">
+                        {initialData ? 'Modifica' : 'Aggiungi'}
+                    </h2>
+                    <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+                        <X size={20} />
+                    </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Nome Alimento</label>
-                        <input
-                            autoFocus={!initialData}
-                            type="text"
-                            required
-                            className="w-full p-3 rounded-lg bg-gray-50 border border-gray-200"
-                            placeholder="es. Petto di pollo"
-                            value={name}
-                            onChange={e => setName(e.target.value)}
-                        />
-                    </div>
+                {/* Scrollable Content */}
+                <div className="flex-1 overflow-y-auto p-5 space-y-6">
+                    {/* Scanner Button within form flow */}
+                    {!initialData && (
+                        <button
+                            type="button"
+                            onClick={() => setIsScanning(true)}
+                            className="w-full py-3 bg-blue-50 text-blue-600 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-blue-100 transition-colors"
+                        >
+                            <Scan size={20} />
+                            Scansiona Barcode
+                        </button>
+                    )}
 
-                    <div className="grid grid-cols-2 gap-4">
+                    {/* Main Info */}
+                    <div className="space-y-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Quantità (g)</label>
+                            <label className="block text-sm font-medium mb-1">Nome Prodotto</label>
                             <input
-                                type="number"
-                                required
-                                min="0"
-                                className="w-full p-3 rounded-lg bg-gray-50 border border-gray-200"
-                                value={quantity}
-                                onChange={e => setQuantity(Number(e.target.value))}
+                                value={name}
+                                onChange={e => setName(e.target.value)}
+                                className="w-full text-lg font-bold border-b-2 border-gray-200 focus:border-black outline-none py-1 bg-transparent placeholder-gray-300"
+                                placeholder="es. Avena"
                             />
                         </div>
-                        <div className="flex items-center pt-6">
-                            <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium mb-1">Categoria</label>
+                                <select
+                                    value={category}
+                                    onChange={e => setCategory(e.target.value as FoodCategory)}
+                                    className="w-full p-2 bg-gray-50 rounded-lg text-sm border-r-8 border-transparent"
+                                >
+                                    <option value="Colazione">Colazione</option>
+                                    <option value="PranzoCena">Pranzo/Cena</option>
+                                    <option value="Spuntino">Spuntino</option>
+                                    <option value="Condimento">Condimento</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium mb-1">Nutri-Score</label>
+                                <div className="flex bg-gray-50 rounded-lg p-1">
+                                    {(['a', 'b', 'c', 'd', 'e'] as const).map(s => (
+                                        <button
+                                            key={s}
+                                            type="button"
+                                            onClick={() => setNutriScore(s)}
+                                            className={clsx(
+                                                "flex-1 py-1 rounded text-xs font-bold uppercase transition-all",
+                                                nutriScore === s
+                                                    ? "bg-black text-white shadow-sm"
+                                                    : "text-gray-400 hover:text-gray-600"
+                                            )}
+                                        >
+                                            {s}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Quantity Section */}
+                    <div className="bg-gray-50 p-4 rounded-xl space-y-4">
+                        <div className="flex gap-4">
+                            <div className="w-1/3">
+                                <label className="block text-xs font-bold uppercase text-gray-400 mb-1">Unità</label>
+                                <select
+                                    value={unit}
+                                    onChange={e => setUnit(e.target.value as any)}
+                                    className="w-full p-2 bg-white rounded-lg border border-gray-200 text-sm"
+                                >
+                                    <option value="g">Grammi (g)</option>
+                                    <option value="ml">Millilitri (ml)</option>
+                                    <option value="pz">Pezzi (pz)</option>
+                                </select>
+                            </div>
+                            <div className="flex-1">
+                                <label className="block text-xs font-bold uppercase text-gray-400 mb-1">Quantità Dispensa</label>
                                 <input
-                                    type="checkbox"
-                                    checked={isCondiment}
-                                    onChange={e => setIsCondiment(e.target.checked)}
-                                    className="w-5 h-5 rounded border-gray-300 text-blue-600"
+                                    type="number"
+                                    value={quantity}
+                                    onChange={e => setQuantity(Number(e.target.value))}
+                                    className="w-full p-2 bg-white rounded-lg border border-gray-200 text-sm font-mono"
+                                    placeholder="0"
                                 />
-                                È un condimento
-                            </label>
-                        </div>
-                    </div>
-
-                    <div className="bg-gray-50 p-4 rounded-xl space-y-3">
-                        <h3 className="text-sm font-bold text-gray-900 flex justify-between">
-                            <span>Valori Nutrizionali (per 100g)</span>
-                            <span className="text-xs font-normal text-gray-500">Manual Input</span>
-                        </h3>
-                        <div className="grid grid-cols-2 gap-3">
-                            <div>
-                                <label className="text-xs text-gray-500">Calorie (kcal)</label>
-                                <input type="number" required min="0" value={calories} onChange={e => setCalories(Number(e.target.value))} className="w-full p-2 rounded border border-gray-200 text-sm" />
-                            </div>
-                            <div>
-                                <label className="text-xs text-gray-500">Proteine (g)</label>
-                                <input type="number" required min="0" value={protein} onChange={e => setProtein(Number(e.target.value))} className="w-full p-2 rounded border border-gray-200 text-sm" />
-                            </div>
-                            <div>
-                                <label className="text-xs text-gray-500">Carboidrati (g)</label>
-                                <input type="number" required min="0" value={carbs} onChange={e => setCarbs(Number(e.target.value))} className="w-full p-2 rounded border border-gray-200 text-sm" />
-                            </div>
-                            <div>
-                                <label className="text-xs text-gray-500">Grassi (g)</label>
-                                <input type="number" required min="0" value={fat} onChange={e => setFat(Number(e.target.value))} className="w-full p-2 rounded border border-gray-200 text-sm" />
                             </div>
                         </div>
+                        {unit === 'pz' && (
+                            <div>
+                                <label className="block text-xs font-bold uppercase text-gray-400 mb-1">Peso per pezzo (g)</label>
+                                <input
+                                    type="number"
+                                    value={conversion}
+                                    onChange={e => setConversion(Number(e.target.value))}
+                                    className="w-full p-2 bg-white rounded-lg border border-gray-200 text-sm"
+                                    placeholder="Es. 50g per un uovo"
+                                />
+                            </div>
+                        )}
                     </div>
 
+                    {/* Nutrition Grid */}
+                    <div>
+                        <h3 className="text-sm font-bold mb-3">Valori Nutrizionali (su 100g)</h3>
+                        <div className="grid grid-cols-4 gap-3">
+                            <NumInput label="Kcal" value={nutrition.calories} onChange={v => setNutrition({ ...nutrition, calories: v })} step="1" />
+                            <NumInput label="Prot" value={nutrition.protein} onChange={v => setNutrition({ ...nutrition, protein: v })} />
+                            <NumInput label="Carb" value={nutrition.carbs} onChange={v => setNutrition({ ...nutrition, carbs: v })} />
+                            <NumInput label="Fat" value={nutrition.fat} onChange={v => setNutrition({ ...nutrition, fat: v })} />
+                            <NumInput label="Zuc" value={nutrition.sugar} onChange={v => setNutrition({ ...nutrition, sugar: v })} />
+                            <NumInput label="Fib" value={nutrition.fiber} onChange={v => setNutrition({ ...nutrition, fiber: v })} />
+                            <NumInput label="Sale" value={nutrition.salt} onChange={v => setNutrition({ ...nutrition, salt: v })} />
+                            <NumInput label="Sat.F" value={nutrition.saturatedFat} onChange={v => setNutrition({ ...nutrition, saturatedFat: v })} />
+                        </div>
+                    </div>
+                </div>
+
+                {/* Footer Actions */}
+                <div className="p-4 border-t border-gray-100 bg-white sticky bottom-0 z-10">
                     <button
-                        type="submit"
+                        onClick={handleSubmit}
                         disabled={!name}
-                        className="w-full py-4 bg-black text-white font-bold rounded-xl mt-4 hover:bg-gray-800 disabled:opacity-50"
+                        className="w-full py-4 bg-black text-white rounded-xl font-bold text-lg hover:bg-gray-800 active:scale-95 transition-all disabled:opacity-50 disabled:scale-100"
                     >
-                        {initialData ? 'Salva Modifiche' : 'Aggiungi alla Dispensa'}
+                        Salva Alimento
                     </button>
-
-                    {initialData && (
-                        <p className="text-center text-xs text-gray-400">
-                            Modificare i valori non cambierà le diete già generate.
-                        </p>
-                    )}
-                </form>
+                </div>
             </div>
         </div>
-    )
+    );
 }

@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import type { DayPlan } from '../types';
 import { generateMealPlan } from '../utils/generator';
 import { useUser } from './UserContext';
-import { useInventory } from './InventoryContext';
+import { usePantry } from './PantryContext';
 
 interface MealPlannerContextType {
     plan: DayPlan[] | null;
@@ -18,7 +18,7 @@ export const MealPlannerProvider = ({ children }: { children: ReactNode }) => {
     const [plan, setPlan] = useLocalStorage<DayPlan[] | null>('sfp_meal_plan', null);
     const [isGenerating, setIsGenerating] = useState(false);
     const { profile } = useUser();
-    const { items: inventory } = useInventory();
+    const { items: inventory } = usePantry();
 
     const generate = () => {
         if (!profile) return;

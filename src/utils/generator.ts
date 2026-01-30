@@ -1,165 +1,140 @@
 import type { PantryItem, UserProfile, DayPlan, Meal, Nutrition, FoodCategory } from '../types';
 import { calculateDailyTargets } from './calculations';
 
-const MEAL_TYPES = ['breakfast', 'snack_am', 'lunch', 'snack_pm', 'dinner'] as const;
+// Meal configuration
+const MEAL_CONFIG = {
+    breakfast: { name: 'Colazione', targetRatio: 0.25, type: 'breakfast' as const },
+    snack_am: { name: 'Spuntino Mattina', targetRatio: 0.10, type: 'snack_am' as const },
+    lunch: { name: 'Pranzo', targetRatio: 0.35, type: 'lunch' as const },
+    snack_pm: { name: 'Spuntino Pomeriggio', targetRatio: 0.10, type: 'snack_pm' as const },
+    dinner: { name: 'Cena', targetRatio: 0.20, type: 'dinner' as const },
+};
 
-function getRequiredCategory(mealType: string): FoodCategory[] {
-    switch (mealType) {
-        case 'breakfast': return ['protein', 'carb'];
-        case 'snack_am': return ['fruit', 'carb'];
-        case 'lunch': return ['protein', 'carb', 'veg'];
-        case 'snack_pm': return ['protein', 'carb'];
-        case 'dinner': return ['protein', 'fat', 'veg'];
-        default: return ['protein', 'carb'];
-    }
-}
-
-// Helper to manage virtual inventory during generation
-class InventoryManager {
-    private items: PantryItem[];
-
-    constructor(initialItems: PantryItem[]) {
-        // Deep copy to simulate consumption without affecting real state yet
-        this.items = JSON.parse(JSON.stringify(initialItems));
-    }
-
-    findAndConsume(category: FoodCategory, amountNeeded: number = 0): { item: PantryItem, amount: number } | null {
-        // Simple logic: Find first item of category with quantity > 0
-        // Improvement: could prioritize expiring items or open packages if we tracked that
-
-        // Filter candidates
-        const candidates = this.items.filter(i => i.category === category && i.quantity > 5); // buffer of 5g
-
-        if (candidates.length === 0) return null;
-
-        // Pick random or first? Let's pick random to vary diet if user has multiple options
-        const itemIndex = Math.floor(Math.random() * candidates.length);
-        const item = candidates[itemIndex];
-
-        // Determine amount to consume
-        // If amountNeeded is 0 (dynamic), we pick a standard portion based on item type
-        let consumeAmount = amountNeeded;
-        if (consumeAmount === 0) {
-            // Standard portions logic
-            if (item.unit === 'g') {
-                switch (category) {
-                    case 'protein': consumeAmount = 150; break;
-                    case 'carb': consumeAmount = 80; break; // Raw weight usually
-                    case 'fat': consumeAmount = 20; break;
-                    case 'veg': consumeAmount = 200; break;
-                    case 'fruit': consumeAmount = 150; break;
-                    case 'flavor': consumeAmount = 10; break;
-                    default: consumeAmount = 100;
-                }
-            } else {
-                consumeAmount = 1; // 1 unit
-            }
-        }
-
-        // Check if we have enough
-        if (item.quantity < consumeAmount) {
-            // Use what's left? Or fail? 
-            // Let's use what's left if it's at least 50% of portion, otherwise skip/fail.
-            if (item.quantity > consumeAmount * 0.5) {
-                consumeAmount = item.quantity;
-            } else {
-                // Not enough for a meaningful portion -> try another candidate?
-                // For simplicity v1: fail this item
-                return null;
-            }
-        }
-
-        // Deduct
-        item.quantity -= consumeAmount;
-
-        return { item, amount: Math.round(consumeAmount) };
-    }
-}
-
-export function generateMealPlan(
-    inventory: PantryItem[],
-    profile: UserProfile
-): DayPlan[] {
+export function generateMealPlan(inventory: PantryItem[], profile: UserProfile): DayPlan[] {
     const targets = calculateDailyTargets(profile);
     const plan: DayPlan[] = [];
 
-    // Initialize Virtual Inventory
-    const invManager = new InventoryManager(inventory);
+    // Clone inventory for tracking usage across the week
+    const virtualInventory = inventory.map(i => ({ ...i }));
 
-    // Generate 7 days
-    for (let i = 0; i < 7; i++) {
+    for (let day = 0; day < 7; day++) {
         const date = new Date();
-        date.setDate(date.getDate() + i);
-
-        const dayIndex = (date.getDay() + 6) % 7; // Monday = 0
-        const workoutTime = profile.schedule[dayIndex];
-        const isTrainingDay = !!workoutTime;
+        date.setDate(date.getDate() + day);
 
         const meals: Meal[] = [];
-        let currentCalories = 0;
+        let dayCalories = 0;
 
-        MEAL_TYPES.forEach(mealType => {
-            const categories = getRequiredCategory(mealType);
+        for (const [key, config] of Object.entries(MEAL_CONFIG)) {
+            const mealTarget = Math.round(targets.calories * config.targetRatio);
 
-            // Adjust categories for workout logic
-            if (mealType === 'snack_pm' && isTrainingDay) {
-                if (!categories.includes('carb')) categories.push('carb');
-            }
+            // Filter candidates based on meal type strictly
+            // Logic: Breakfast -> Colazione items, Lunch/Dinner -> PranzoCena, Snacks -> Spuntino
+            let allowedCategories: FoodCategory[] = [];
+            if (key === 'breakfast') allowedCategories = ['Colazione'];
+            else if (key === 'lunch' || key === 'dinner') allowedCategories = ['PranzoCena'];
+            else allowedCategories = ['Spuntino'];
+
+            // Find items that match category AND have quantity > 0
+            const candidates = virtualInventory.filter(i =>
+                allowedCategories.includes(i.category) && i.quantity > 5
+            );
+
+            // Sorting: Prioritize NutriScore A/B
+            candidates.sort((a, b) => {
+                const scoreA = a.nutriScore || 'e';
+                const scoreB = b.nutriScore || 'e';
+                return scoreA.localeCompare(scoreB);
+            });
+
+            // Selection Logic:
+            // 1. Pick a Main Item (Protein/Carb dense)
+            // 2. Calculate amount needed to hit ~90% of meal target (leave room for condiments/veg if we had them separate)
+            // For now, since categories are broad ('PranzoCena'), just pick one main item + potentially a condiment.
+
+            // Simplified Solver: Pick 1 random candidate from top 50% of quality if possible
+            const poolSize = Math.max(1, Math.floor(candidates.length / 2));
+            const selectedItem = candidates.length > 0
+                ? candidates[Math.floor(Math.random() * Math.min(candidates.length, poolSize))]
+                : null;
 
             const ingredients: { item: PantryItem; amount: number }[] = [];
-            let mealNutrition: Nutrition = { calories: 0, protein: 0, carbs: 0, fat: 0, sugar: 0, fiber: 0, salt: 0 };
+            let mealNutrition: Nutrition = { calories: 0, protein: 0, carbs: 0, fat: 0, sugar: 0, fiber: 0, salt: 0, saturatedFat: 0 };
 
-            // Attempt to fill meal
-            let missingIngredients = false;
+            if (selectedItem) {
+                // Determine Quantity
+                // Calories needed = mealTarget
+                // Calories per unit = (nutrition.calories / (unit === 'pz' ? 1 : 100))
+                const calPerUnit = selectedItem.nutrition.calories / (selectedItem.unit === 'pz' ? 1 : 100);
 
-            for (const cat of categories) {
-                const result = invManager.findAndConsume(cat);
+                let amountNeeded = 0;
+                if (calPerUnit > 0) {
+                    amountNeeded = mealTarget / calPerUnit;
+                }
 
-                if (result) {
-                    // Calculate Source Macros based on EXACT amount used
-                    const { item, amount } = result;
+                // Adjust for Pantry Inventory
+                if (amountNeeded > selectedItem.quantity) {
+                    amountNeeded = selectedItem.quantity; // Use all remaining
+                }
 
-                    // Normalize to 100g/ml or 1 unit
-                    const isWeight = item.unit === 'g' || item.unit === 'ml';
-                    const ratio = amount / (isWeight ? 100 : 1);
-
-                    const n = item.nutrition;
-                    mealNutrition.calories += n.calories * ratio;
-                    mealNutrition.protein += n.protein * ratio;
-                    mealNutrition.carbs += n.carbs * ratio;
-                    mealNutrition.fat += n.fat * ratio;
-
-                    ingredients.push({ item, amount });
+                // If unit is 'pz', round to nearest integer or 0.5? Let's round to 0.5 if loose, or integer.
+                if (selectedItem.unit === 'pz') {
+                    amountNeeded = Math.round(amountNeeded * 2) / 2;
+                    if (amountNeeded < 0.5) amountNeeded = 0.5;
                 } else {
-                    missingIngredients = true;
+                    amountNeeded = Math.round(amountNeeded); // Grams integer
+                }
+
+                // Deduct from Virtual Inventory
+                selectedItem.quantity -= amountNeeded;
+
+                // Add to Meal
+                ingredients.push({ item: selectedItem, amount: amountNeeded });
+
+                // Update Nutrition
+                const ratio = amountNeeded / (selectedItem.unit === 'pz' ? 1 : 100);
+                mealNutrition = {
+                    calories: selectedItem.nutrition.calories * ratio,
+                    protein: selectedItem.nutrition.protein * ratio,
+                    carbs: selectedItem.nutrition.carbs * ratio,
+                    fat: selectedItem.nutrition.fat * ratio,
+                    sugar: selectedItem.nutrition.sugar * ratio,
+                    fiber: selectedItem.nutrition.fiber * ratio,
+                    salt: selectedItem.nutrition.salt * ratio,
+                    saturatedFat: selectedItem.nutrition.saturatedFat * ratio
+                };
+            }
+
+            // Recipe Method Generation
+            let method = "Nessun ingrediente disponibile.";
+            if (ingredients.length > 0) {
+                const mainName = ingredients[0].item.name;
+                const cat = ingredients[0].item.category;
+
+                if (cat === 'Colazione') method = `Prepara ${mainName} come preferisci per una colazione energetica.`;
+                else if (cat === 'Spuntino') method = `Gusta ${mainName} come spezza-fame rapido.`;
+                else if (cat === 'PranzoCena') {
+                    if (mainName.toLowerCase().includes('pasta') || mainName.toLowerCase().includes('riso')) {
+                        method = `Cuoci ${mainName} in abbondante acqua salata. Condisci a piacere (ricorda di tracciare l'olio!).`;
+                    } else if (mainName.toLowerCase().includes('pollo') || mainName.toLowerCase().includes('manzo') || mainName.toLowerCase().includes('pesce')) {
+                        method = `Griglia o cuoci in padella ${mainName}. Aggiungi spezie a piacere.`;
+                    } else {
+                        method = `Cucina ${mainName} secondo la tua ricetta preferita mantenendo le quantità indicate.`;
+                    }
                 }
             }
 
-            if (missingIngredients && ingredients.length === 0) {
-                // Completely empty meal -> Warning
-                meals.push({
-                    id: `meal-${i}-${mealType}`,
-                    name: "NOT ENOUGH FOOD",
-                    type: mealType,
-                    ingredients: [],
-                    totalNutrition: { calories: 0, protein: 0, carbs: 0, fat: 0, sugar: 0, fiber: 0, salt: 0 },
-                    prepTime: 0,
-                    instructions: ["You do not have enough ingredients in your pantry for this meal."]
-                });
-            } else {
-                meals.push({
-                    id: `meal-${i}-${mealType}`,
-                    name: missingIngredients ? `${mealType.toUpperCase()} (Incomplete)` : mealType.replace('_', ' ').toUpperCase(),
-                    type: mealType,
-                    ingredients,
-                    totalNutrition: mealNutrition,
-                    prepTime: 15,
-                    instructions: ['Combine ingredients.', 'Cook if necessary.', 'Serve.']
-                });
-            }
+            meals.push({
+                id: `meal-${day}-${key}`,
+                name: config.name,
+                type: config.type,
+                ingredients,
+                totalNutrition: mealNutrition,
+                prepTime: 10,
+                method
+            });
 
-            currentCalories += mealNutrition.calories;
-        });
+            dayCalories += mealNutrition.calories;
+        }
 
         plan.push({
             date: date.toISOString(),

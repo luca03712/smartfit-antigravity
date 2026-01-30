@@ -7,6 +7,8 @@ interface UserContextType {
     profile: UserProfile | null;
     updateProfile: (profile: UserProfile) => void;
     updateSchedule: (schedule: WeeklySchedule) => void;
+    addWater: (amount: number) => void;
+    setWorkoutTime: (time: string) => void;
     hasOnboarded: boolean;
 }
 
@@ -25,10 +27,28 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         }
     };
 
+    const addWater = (amount: number) => {
+        if (profile && profile.waterIntake) {
+            setProfile({
+                ...profile,
+                waterIntake: {
+                    ...profile.waterIntake,
+                    current: profile.waterIntake.current + amount
+                }
+            });
+        }
+    };
+
+    const setWorkoutTime = (time: string) => {
+        if (profile) {
+            setProfile({ ...profile, workoutTime: time });
+        }
+    };
+
     const hasOnboarded = !!profile;
 
     return (
-        <UserContext.Provider value={{ profile, updateProfile, updateSchedule, hasOnboarded }}>
+        <UserContext.Provider value={{ profile, updateProfile, updateSchedule, addWater, setWorkoutTime, hasOnboarded }}>
             {children}
         </UserContext.Provider>
     );
