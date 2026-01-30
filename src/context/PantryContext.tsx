@@ -31,8 +31,8 @@ export const PantryProvider = ({ children }: { children: ReactNode }) => {
         );
     };
 
-    const getCondiments = () => items.filter((i) => i.category === 'Condimento');
-    const getMainItems = () => items.filter((i) => i.category !== 'Condimento');
+    const getCondiments = () => items.filter((i) => i.categories?.includes('Condimento'));
+    const getMainItems = () => items.filter((i) => !i.categories?.includes('Condimento'));
 
     return (
         <PantryContext.Provider value={{ items, addItem, removeItem, updateItem, getCondiments, getMainItems }}>

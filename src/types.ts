@@ -48,7 +48,7 @@ export interface PantryItem {
     unit: Unit;
     nutrition: Nutrition; // per 100g/ml or per 1 conversionFactor
     nutriScore?: NutriScore;
-    category: FoodCategory;
+    categories: FoodCategory[];
     conversionFactor?: number; // if unit is 'pz', grams per piece
     barcode?: string;
 }

@@ -113,18 +113,18 @@ export const foodDatabase: Record<string, FoodTemplate> = {
         defaultQuantity: 30
     },
 
-    // Pranzo/Cena
+    // Veg
     'broccoli': {
         name: 'Broccoli',
         nutrition: { calories: 34, protein: 2.8, carbs: 7, fat: 0.4, sugar: 1.7, fiber: 2.6, salt: 0 },
-        category: 'Pranzo/Cena',
+        category: 'veg',
         unit: 'g',
         defaultQuantity: 100
     },
     'spinach': {
         name: 'Spinach',
         nutrition: { calories: 23, protein: 2.9, carbs: 3.6, fat: 0.4, sugar: 0.4, fiber: 2.2, salt: 0.1 },
-        category: 'Pranzo/Cena',
+        category: 'veg',
         unit: 'g',
         defaultQuantity: 100
     },
@@ -173,4 +173,3 @@ export function enrichFoodData(query: string): FoodTemplate | null {
     const found = Object.keys(foodDatabase).find(k => searchKey.includes(k) || k.includes(searchKey));
     return found ? foodDatabase[found] : null;
 }
-

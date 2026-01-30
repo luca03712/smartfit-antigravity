@@ -12,8 +12,20 @@ export function PantryManager() {
     const [editingItem, setEditingItem] = useState<PantryItem | null>(null);
     const [filter, setFilter] = useState<FoodCategory | 'All'>('All');
 
-    // Derived state for list
-    const filteredItems = items.filter(item => filter === 'All' ? true : item.category === filter);
+    // Body scroll lock effect
+    useEffect(() => {
+        if (isModalOpen) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = 'unset';
+        }
+        return () => { document.body.style.overflow = 'unset'; };
+    }, [isModalOpen]);
+
+    // Derived state for list - check if category array includes filter
+    const filteredItems = items.filter(item =>
+        filter === 'All' ? true : item.categories?.includes(filter)
+    );
 
     const handleAdd = () => {
         setEditingItem(null);
@@ -117,6 +129,11 @@ function PantryCard({ item, onClick, onDelete }: { item: PantryItem, onClick: ()
                         <span className="font-bold text-gray-900">{item.name}</span>
                         {item.brand && <span className="text-[10px] text-gray-400 uppercase tracking-wider">{item.brand}</span>}
                     </div>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                        {item.categories?.map(c => (
+                            <span key={c} className="text-[9px] font-bold uppercase bg-gray-100 text-gray-500 px-1 rounded">{c}</span>
+                        ))}
+                    </div>
                     <div className="flex items-center gap-2 mt-1">
                         <span className="text-xs font-mono bg-gray-100 px-2 py-0.5 rounded text-gray-600">
                             {item.quantity}{item.unit}
@@ -160,7 +177,7 @@ function PantryItemModal({ onClose, onSave, initialData }: ModalProps) {
     // Form State
     const [name, setName] = useState(initialData?.name || '');
     const [brand, setBrand] = useState(initialData?.brand || '');
-    const [category, setCategory] = useState<FoodCategory>(initialData?.category || 'Colazione');
+    const [categories, setCategories] = useState<FoodCategory[]>(initialData?.categories || ['Colazione']);
     const [nutriScore, setNutriScore] = useState<NutriScore>(initialData?.nutriScore || 'c');
 
     // Quantity State
@@ -179,13 +196,13 @@ function PantryItemModal({ onClose, onSave, initialData }: ModalProps) {
             const match = searchInternalDatabase(name);
             if (match) {
                 if (match.nutrition) setNutrition({ ...nutrition, ...match.nutrition });
-                if (match.category) setCategory(match.category);
+                if (match.categories) setCategories(match.categories);
                 if (match.nutriScore) setNutriScore(match.nutriScore);
                 if (match.unit) setUnit(match.unit);
                 if (match.conversionFactor) setConversion(match.conversionFactor);
             }
         }
-    }, [name, initialData]); // Run when name changes and no initial data
+    }, [name, initialData]);
 
     const handleScan = async (code: string) => {
         setIsScanning(false);
@@ -195,9 +212,12 @@ function PantryItemModal({ onClose, onSave, initialData }: ModalProps) {
             if (data.brand) setBrand(data.brand);
             if (data.nutrition) setNutrition({ ...nutrition, ...data.nutrition });
             if (data.nutriScore) setNutriScore(data.nutriScore);
-            if (data.category) setCategory(data.category);
+            if (data.categories) setCategories(data.categories);
         } else {
-            alert('Prodotto non trovato o errore API.');
+            // Error handling handled by Scanner component now or we can show alert here?
+            // The user requested explicit button inside Scanner.
+            // This is just the callback.
+            // If data is null, fetch failed.
         }
     };
 
@@ -207,7 +227,7 @@ function PantryItemModal({ onClose, onSave, initialData }: ModalProps) {
             id: initialData?.id || crypto.randomUUID(),
             name,
             brand,
-            category,
+            categories,
             nutriScore,
             unit,
             quantity: Number(quantity) || 0,
@@ -216,7 +236,14 @@ function PantryItemModal({ onClose, onSave, initialData }: ModalProps) {
         });
     };
 
-    // Helper for number inputs to fix "leading zero" (by treating 0 as '')
+    const toggleCategory = (cat: FoodCategory) => {
+        setCategories(prev =>
+            prev.includes(cat)
+                ? prev.filter(c => c !== cat)
+                : [...prev, cat]
+        );
+    };
+
     const NumInput = ({ label, value, onChange, step = "0.1" }: { label: string, value: number, onChange: (v: number) => void, step?: string }) => (
         <div>
             <label className="text-[10px] uppercase font-bold text-gray-400 mb-1 block">{label}</label>
@@ -237,10 +264,14 @@ function PantryItemModal({ onClose, onSave, initialData }: ModalProps) {
     }
 
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-            <div className="bg-white w-full max-w-lg h-[90vh] sm:h-auto sm:max-h-[85vh] rounded-t-3xl sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-300">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4">
+            {/* Backdrop */}
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+
+            {/* Modal Content */}
+            <div className="relative bg-white w-full max-w-lg h-full sm:h-auto sm:max-h-[90vh] sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
                 {/* Header */}
-                <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-white z-10 sticky top-0">
+                <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-white z-10 shrink-0">
                     <h2 className="text-lg font-bold">
                         {initialData ? 'Modifica' : 'Aggiungi'}
                     </h2>
@@ -251,7 +282,7 @@ function PantryItemModal({ onClose, onSave, initialData }: ModalProps) {
 
                 {/* Scrollable Content */}
                 <div className="flex-1 overflow-y-auto p-5 space-y-6">
-                    {/* Scanner Button within form flow */}
+                    {/* Scanner Button */}
                     {!initialData && (
                         <button
                             type="button"
@@ -275,20 +306,24 @@ function PantryItemModal({ onClose, onSave, initialData }: ModalProps) {
                             />
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 gap-4">
                             <div>
-                                <label className="block text-sm font-medium mb-1">Categoria</label>
-                                <select
-                                    value={category}
-                                    onChange={e => setCategory(e.target.value as FoodCategory)}
-                                    className="w-full p-2 bg-gray-50 rounded-lg text-sm border-r-8 border-transparent"
-                                >
-                                    <option value="Colazione">Colazione</option>
-                                    <option value="PranzoCena">Pranzo/Cena</option>
-                                    <option value="Spuntino">Spuntino</option>
-                                    <option value="Condimento">Condimento</option>
-                                </select>
+                                <label className="block text-sm font-medium mb-2">Categorie (Seleziona multiple)</label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {(['Colazione', 'PranzoCena', 'Spuntino', 'Condimento'] as FoodCategory[]).map(cat => (
+                                        <label key={cat} className="flex items-center gap-2 p-3 bg-gray-50 rounded-xl cursor-pointer hover:bg-gray-100 transition-colors">
+                                            <input
+                                                type="checkbox"
+                                                checked={categories.includes(cat)}
+                                                onChange={() => toggleCategory(cat)}
+                                                className="w-5 h-5 rounded border-gray-300 text-black focus:ring-black"
+                                            />
+                                            <span className="text-sm font-medium">{cat}</span>
+                                        </label>
+                                    ))}
+                                </div>
                             </div>
+
                             <div>
                                 <label className="block text-sm font-medium mb-1">Nutri-Score</label>
                                 <div className="flex bg-gray-50 rounded-lg p-1">
@@ -368,8 +403,8 @@ function PantryItemModal({ onClose, onSave, initialData }: ModalProps) {
                     </div>
                 </div>
 
-                {/* Footer Actions */}
-                <div className="p-4 border-t border-gray-100 bg-white sticky bottom-0 z-10">
+                {/* Sticky Footer */}
+                <div className="p-4 border-t border-gray-100 bg-white z-10 sticky bottom-0 shrink-0 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
                     <button
                         onClick={handleSubmit}
                         disabled={!name}

@@ -12,16 +12,23 @@ export function Scanner({ onScan, onClose }: ScannerProps) {
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        // Initialize scanner
-        // Use a slight delay to ensure DOM is ready
         const timer = setTimeout(() => {
             if (!document.getElementById('reader')) return;
 
             try {
+                // Config to try to force back camera "environment"
+                // Html5QrcodeScanner abstracts this, but we pass config
+                // We'd ideally use Html5Qrcode directly for more control but Scanner is simple.
+                // The library remembers the last camera used typically.
                 scannerRef.current = new Html5QrcodeScanner(
                     "reader",
-                    { fps: 10, qrbox: { width: 250, height: 250 } },
-                    /* verbose= */ false
+                    {
+                        fps: 10,
+                        qrbox: { width: 250, height: 250 },
+                        aspectRatio: 1.0,
+                        showTorchButtonIfSupported: true
+                    },
+                    false
                 );
 
                 scannerRef.current.render(onScanSuccess, onScanFailure);
@@ -33,45 +40,45 @@ export function Scanner({ onScan, onClose }: ScannerProps) {
 
         function onScanSuccess(decodedText: string) {
             onScan(decodedText);
-            // Optionally stop scanning here if we want scanning to close immediately
-            // But usually we let the parent handle closing
         }
 
         function onScanFailure(error: any) {
-            // handle scan failure, usually better to ignore and keep scanning.
-            // console.warn(`Code scan error = ${error}`);
+            // ignore
         }
 
         return () => {
             clearTimeout(timer);
             if (scannerRef.current) {
-                scannerRef.current.clear().catch(error => {
-                    console.error("Failed to clear html5-qrcode scanner. ", error);
-                });
+                try {
+                    scannerRef.current.clear();
+                } catch (e) { console.warn(e); }
             }
         };
     }, [onScan]);
 
     return (
-        <div className="fixed inset-0 bg-black/90 z-[200] flex flex-col items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/95 z-[200] flex flex-col items-center justify-center p-4">
             <button
                 onClick={onClose}
-                className="absolute top-4 right-4 text-white p-2 rounded-full bg-white/20 hover:bg-white/30"
+                className="absolute top-4 right-4 text-white p-3 rounded-full bg-white/20 hover:bg-white/30"
             >
                 <X size={24} />
             </button>
 
-            <h2 className="text-white text-xl font-bold mb-4">Scansiona Codice a Barre</h2>
+            <h2 className="text-white text-xl font-bold mb-8">Scansiona Barcode</h2>
 
-            <div id="reader" className="w-full max-w-sm bg-white rounded-lg overflow-hidden"></div>
+            <div id="reader" className="w-full max-w-sm bg-white rounded-2xl overflow-hidden shadow-2xl"></div>
 
             {error && (
-                <p className="text-red-400 mt-4 text-center">{error}</p>
+                <p className="text-red-400 mt-4 text-center font-medium bg-red-900/20 p-2 rounded">{error}</p>
             )}
 
-            <p className="text-gray-400 text-sm mt-4 text-center max-w-xs">
-                Inquadra il codice a barre del prodotto per cercare i valori nutrizionali.
-            </p>
+            <button
+                onClick={onClose}
+                className="mt-8 px-6 py-4 bg-white text-black font-bold rounded-xl active:scale-95 transition-transform hover:bg-gray-100 w-full max-w-sm"
+            >
+                Prodotto non trovato? Inserisci a mano
+            </button>
         </div>
     );
 }
