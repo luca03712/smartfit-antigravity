@@ -33,10 +33,10 @@ function AppContent() {
   );
 }
 
-// Simple Read-Only Profile View
+// Editable Profile View
 function ProfileView({ profile }: { profile: UserProfile }) {
   const { updateProfile } = useUser();
-  const { calories, protein, carbs, fat } = calculateDailyTargets(profile); // We'd need to import this or just show base
+  const targets = calculateDailyTargets(profile);
 
   const handleUpdate = (updates: Partial<UserProfile>) => {
     updateProfile({ ...profile, ...updates });
@@ -46,26 +46,55 @@ function ProfileView({ profile }: { profile: UserProfile }) {
     <div className="p-6 pb-24">
       <h1 className="text-2xl font-black mb-6 tracking-tight">Il Tuo Profilo</h1>
 
-      {/* Cards Grid */}
-      <div className="space-y-4">
+      <div className="space-y-6">
 
-        {/* Physical Stats */}
-        <div className="bg-white p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100 flex justify-between items-center">
-          <div>
-            <p className="text-gray-400 text-xs font-bold uppercase mb-1">Peso attuale</p>
-            <div className="text-3xl font-black tracking-tighter">{profile.weight}<span className="text-lg text-gray-400 font-medium ml-1">kg</span></div>
+        {/* Stats Grid */}
+        <div className="bg-white p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100 grid grid-cols-2 gap-4">
+          <div className="col-span-2">
+            <label className="text-gray-400 text-xs font-bold uppercase mb-1 block">Peso (kg)</label>
+            <input
+              type="number"
+              value={profile.weight}
+              onChange={e => handleUpdate({ weight: Number(e.target.value) })}
+              className="w-full text-4xl font-black text-gray-900 border-b-2 border-transparent focus:border-black outline-none bg-transparent"
+            />
           </div>
+
           <div>
-            <p className="text-gray-400 text-xs font-bold uppercase mb-1">Altezza</p>
-            <div className="text-3xl font-black tracking-tighter">{profile.height}<span className="text-lg text-gray-400 font-medium ml-1">cm</span></div>
+            <label className="text-gray-400 text-xs font-bold uppercase mb-1 block">Altezza (cm)</label>
+            <input
+              type="number"
+              value={profile.height}
+              onChange={e => handleUpdate({ height: Number(e.target.value) })}
+              className="w-full text-2xl font-bold text-gray-900 border-b-2 border-transparent focus:border-black outline-none bg-transparent"
+            />
           </div>
+
           <div>
-            <p className="text-gray-400 text-xs font-bold uppercase mb-1">Età</p>
-            <div className="text-3xl font-black tracking-tighter">{profile.age}<span className="text-lg text-gray-400 font-medium ml-1">anni</span></div>
+            <label className="text-gray-400 text-xs font-bold uppercase mb-1 block">Età</label>
+            <input
+              type="number"
+              value={profile.age}
+              onChange={e => handleUpdate({ age: Number(e.target.value) })}
+              className="w-full text-2xl font-bold text-gray-900 border-b-2 border-transparent focus:border-black outline-none bg-transparent"
+            />
           </div>
         </div>
 
-        {/* Activity & Goals */}
+        {/* TDEE Summary */}
+        <div className="bg-black text-white p-6 rounded-3xl shadow-xl flex justify-between items-center">
+          <div>
+            <p className="text-xs font-bold uppercase text-gray-400 mb-1">Obiettivo Giornaliero</p>
+            <div className="text-4xl font-black tracking-tighter">{Math.round(targets.calories)}<span className="text-lg text-gray-500 ml-1">kcal</span></div>
+          </div>
+          <div className="text-right space-y-1">
+            <div className="text-xs font-bold"><span className="text-blue-400">{targets.protein}g</span> Prot</div>
+            <div className="text-xs font-bold"><span className="text-amber-400">{targets.carbs}g</span> Carb</div>
+            <div className="text-xs font-bold"><span className="text-rose-400">{targets.fat}g</span> Gras</div>
+          </div>
+        </div>
+
+        {/* Configurations */}
         <div className="bg-white p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100 space-y-6">
 
           {/* Activity Level */}
@@ -79,10 +108,10 @@ function ProfileView({ profile }: { profile: UserProfile }) {
               onChange={(e) => handleUpdate({ activityLevel: e.target.value as any })}
               className="w-full bg-orange-50/50 hover:bg-orange-50 border border-orange-100 rounded-xl p-3 text-sm font-medium outline-none focus:ring-2 focus:ring-orange-500 transition-all"
             >
-              <option value="sedentary">Sedentario (Ufficio, poco movimento)</option>
+              <option value="sedentary">Sedentario (Ufficio)</option>
               <option value="lightly_active">Leggermente Attivo (1-3 allenamenti)</option>
-              <option value="moderate">Moderato (3-5 allenamenti)</option>
-              <option value="very_active">Molto Attivo (Lavoro fisico / sport intenso)</option>
+              <option value="moderate">Moderatamente Attivo (3-5 allenamenti)</option>
+              <option value="very_active">Molto Attivo (Sport Intenso)</option>
             </select>
           </div>
 
@@ -103,6 +132,25 @@ function ProfileView({ profile }: { profile: UserProfile }) {
             </select>
           </div>
 
+          {/* Training Type */}
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <Weight size={18} className="text-indigo-500" />
+              <label className="text-sm font-bold text-gray-900">Tipo Allenamento</label>
+            </div>
+            <select
+              value={profile.trainingType}
+              onChange={(e) => handleUpdate({ trainingType: e.target.value as any })}
+              className="w-full bg-indigo-50/50 hover:bg-indigo-50 border border-indigo-100 rounded-xl p-3 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+            >
+              <option value="bodybuilding">Bodybuilding</option>
+              <option value="powerlifting">Powerlifting</option>
+              <option value="crossfit">Crossfit</option>
+              <option value="calisthenics">Calisthenics</option>
+              <option value="cardio">Cardio / Corsa</option>
+            </select>
+          </div>
+
           {/* Workout Time */}
           <div>
             <div className="flex items-center gap-2 mb-2">
@@ -115,14 +163,12 @@ function ProfileView({ profile }: { profile: UserProfile }) {
               onChange={(e) => handleUpdate({ workoutTime: e.target.value })}
               className="w-full bg-purple-50/50 hover:bg-purple-50 border border-purple-100 rounded-xl p-3 text-sm font-medium outline-none focus:ring-2 focus:ring-purple-500 transition-all"
             />
-            <p className="text-[10px] text-gray-400 mt-2 font-medium">Usato per inviarti notifiche pre-workout.</p>
           </div>
         </div>
 
-        {/* Info */}
         <div className="text-center py-6">
           <p className="text-xs text-gray-400 font-medium">
-            Il tuo piano nutrizionale si aggiorna automaticamente in base a queste impostazioni.
+            v1.1 - SmartFit Pantry
           </p>
         </div>
 

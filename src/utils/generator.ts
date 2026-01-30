@@ -34,10 +34,24 @@ export function generateMealPlan(inventory: PantryItem[], profile: UserProfile):
             else if (key === 'lunch' || key === 'dinner') allowedCategories = ['PranzoCena'];
             else allowedCategories = ['Spuntino'];
 
-            // Find items that match category AND have quantity > 0
-            const candidates = virtualInventory.filter(i =>
-                allowedCategories.includes(i.category) && i.quantity > 5
+            // Strategy: 
+            // 1. Try exact match (correct category + quantity > 5g)
+            // 2. Fallback: Try ANY item (ignore category strictness if starving)
+            let candidates = virtualInventory.filter(i =>
+                i.categories?.some(cat => allowedCategories.includes(cat)) && i.quantity > 5
             );
+
+            // If no candidates found for this specific meal type, relax category constraint to find ANYTHING edible
+            if (candidates.length === 0) {
+                // Try searching ignoring category, but maybe prefer not Condiments as main
+                candidates = virtualInventory.filter(i =>
+                    i.quantity > 5 && !i.categories?.includes('Condimento')
+                );
+                // If STILL nothing, look at condiments or anything
+                if (candidates.length === 0) {
+                    candidates = virtualInventory.filter(i => i.quantity > 5);
+                }
+            }
 
             // Sorting: Prioritize NutriScore A/B
             candidates.sort((a, b) => {
@@ -45,11 +59,6 @@ export function generateMealPlan(inventory: PantryItem[], profile: UserProfile):
                 const scoreB = b.nutriScore || 'e';
                 return scoreA.localeCompare(scoreB);
             });
-
-            // Selection Logic:
-            // 1. Pick a Main Item (Protein/Carb dense)
-            // 2. Calculate amount needed to hit ~90% of meal target (leave room for condiments/veg if we had them separate)
-            // For now, since categories are broad ('PranzoCena'), just pick one main item + potentially a condiment.
 
             // Simplified Solver: Pick 1 random candidate from top 50% of quality if possible
             const poolSize = Math.max(1, Math.floor(candidates.length / 2));
@@ -59,6 +68,8 @@ export function generateMealPlan(inventory: PantryItem[], profile: UserProfile):
 
             const ingredients: { item: PantryItem; amount: number }[] = [];
             let mealNutrition: Nutrition = { calories: 0, protein: 0, carbs: 0, fat: 0, sugar: 0, fiber: 0, salt: 0, saturatedFat: 0 };
+
+            let method = "Nessun ingrediente in dispensa. Aggiungi cibi per generare.";
 
             if (selectedItem) {
                 // Determine Quantity
@@ -71,27 +82,33 @@ export function generateMealPlan(inventory: PantryItem[], profile: UserProfile):
                     amountNeeded = mealTarget / calPerUnit;
                 }
 
-                // Adjust for Pantry Inventory
-                if (amountNeeded > selectedItem.quantity) {
-                    amountNeeded = selectedItem.quantity; // Use all remaining
-                }
+                // Adjust for Pantry Inventory (Soft limit: don't block meal if low stock, just warn or use what's there?
+                // Logic: Use what is available.
+                // However, to fill the plan, user requested BEST EFFORT.
+                // We will use min(amountNeeded, quantity). 
+                // BUT if quantity is super low, maybe we shouldn't even pick it? 
+                // Constraints: We filtered for > 5.
 
-                // If unit is 'pz', round to nearest integer or 0.5? Let's round to 0.5 if loose, or integer.
+                let available = selectedItem.quantity;
+                let actualAmount = Math.min(amountNeeded, available);
+
+                // If unit is 'pz', round to nearest integer (or 0.5)
                 if (selectedItem.unit === 'pz') {
-                    amountNeeded = Math.round(amountNeeded * 2) / 2;
-                    if (amountNeeded < 0.5) amountNeeded = 0.5;
+                    // Round to nearest 0.5
+                    actualAmount = Math.max(0.5, Math.floor(actualAmount * 2) / 2);
                 } else {
-                    amountNeeded = Math.round(amountNeeded); // Grams integer
+                    actualAmount = Math.max(5, Math.floor(actualAmount)); // Minimum 5g
                 }
 
                 // Deduct from Virtual Inventory
-                selectedItem.quantity -= amountNeeded;
+                selectedItem.quantity = Math.max(0, selectedItem.quantity - actualAmount);
 
                 // Add to Meal
-                ingredients.push({ item: selectedItem, amount: amountNeeded });
+                // We push a CLONE of the item to the meal, because the item state in virtualInventory changes
+                ingredients.push({ item: { ...selectedItem }, amount: actualAmount });
 
                 // Update Nutrition
-                const ratio = amountNeeded / (selectedItem.unit === 'pz' ? 1 : 100);
+                const ratio = actualAmount / (selectedItem.unit === 'pz' ? 1 : 100);
                 mealNutrition = {
                     calories: selectedItem.nutrition.calories * ratio,
                     protein: selectedItem.nutrition.protein * ratio,
@@ -102,34 +119,41 @@ export function generateMealPlan(inventory: PantryItem[], profile: UserProfile):
                     salt: selectedItem.nutrition.salt * ratio,
                     saturatedFat: selectedItem.nutrition.saturatedFat * ratio
                 };
-            }
 
-            // Recipe Method Generation
-            let method = "Nessun ingrediente disponibile.";
-            if (ingredients.length > 0) {
-                const mainName = ingredients[0].item.name;
-                const cat = ingredients[0].item.category;
+                // Recipe Method Generation
+                const mainName = selectedItem.name;
+                const cats = selectedItem.categories || [];
 
-                if (cat === 'Colazione') method = `Prepara ${mainName} come preferisci per una colazione energetica.`;
-                else if (cat === 'Spuntino') method = `Gusta ${mainName} come spezza-fame rapido.`;
-                else if (cat === 'PranzoCena') {
+                if (cats.includes('Colazione')) method = `Prepara ${mainName} come preferisci per una colazione energetica.`;
+                else if (cats.includes('Spuntino')) method = `Gusta ${mainName} come spezza-fame rapido.`;
+                else if (cats.includes('PranzoCena')) {
                     if (mainName.toLowerCase().includes('pasta') || mainName.toLowerCase().includes('riso')) {
-                        method = `Cuoci ${mainName} in abbondante acqua salata. Condisci a piacere (ricorda di tracciare l'olio!).`;
+                        method = `Cuoci ${mainName} in abbondante acqua salata.`;
                     } else if (mainName.toLowerCase().includes('pollo') || mainName.toLowerCase().includes('manzo') || mainName.toLowerCase().includes('pesce')) {
                         method = `Griglia o cuoci in padella ${mainName}. Aggiungi spezie a piacere.`;
                     } else {
                         method = `Cucina ${mainName} secondo la tua ricetta preferita mantenendo le quantità indicate.`;
                     }
+                } else {
+                    method = `Consuma ${mainName} nella quantità indicata.`;
+                }
+            } else {
+                // Check if inventory is empty
+                const totalItems = inventory.length;
+                if (totalItems === 0) {
+                    method = "⚠️ Dispensa vuota. Aggiungi alimenti.";
+                } else {
+                    method = "Impossibile trovare alimenti adatti. Prova a variare la dispensa.";
                 }
             }
 
             meals.push({
                 id: `meal-${day}-${key}`,
-                name: config.name,
+                name: selectedItem ? config.name : "Niente in Dispensa",
                 type: config.type,
                 ingredients,
                 totalNutrition: mealNutrition,
-                prepTime: 10,
+                prepTime: 5,
                 method
             });
 

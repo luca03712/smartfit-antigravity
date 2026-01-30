@@ -246,21 +246,6 @@ function PantryItemModal({ onClose, onSave, initialData }: ModalProps) {
         );
     };
 
-    const NumInput = ({ label, value, onChange, step = "0.1" }: { label: string, value: number, onChange: (v: number) => void, step?: string }) => (
-        <div>
-            <label className="text-[10px] uppercase font-bold text-gray-400 mb-1 block">{label}</label>
-            <input
-                type="number"
-                step={step}
-                min="0"
-                className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2 text-sm focus:ring-2 focus:ring-black outline-none transition-all"
-                value={value === 0 ? '' : value}
-                onChange={e => onChange(e.target.value === '' ? 0 : parseFloat(e.target.value))}
-                placeholder="0"
-            />
-        </div>
-    );
-
     if (isScanning) {
         return <Scanner onScan={handleScan} onClose={() => setIsScanning(false)} />;
     }
@@ -417,3 +402,18 @@ function PantryItemModal({ onClose, onSave, initialData }: ModalProps) {
         </div>
     );
 }
+
+const NumInput = ({ label, value, onChange, step = "0.1" }: { label: string, value: number, onChange: (v: number) => void, step?: string }) => (
+    <div>
+        <label className="text-[10px] uppercase font-bold text-gray-400 mb-1 block">{label}</label>
+        <input
+            type="number"
+            step={step}
+            min="0"
+            className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2 text-sm focus:ring-2 focus:ring-black outline-none transition-all"
+            value={value === 0 ? '' : value}
+            onChange={e => onChange(e.target.value === '' ? 0 : parseFloat(e.target.value))}
+            placeholder="0"
+        />
+    </div>
+);
